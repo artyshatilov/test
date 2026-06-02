@@ -1,0 +1,136 @@
+
+SHARED ON-CHAIN CASINO / LOTTERY POOL — BUSINESS MODEL SIMULATION
+
+==============================================================================
+1) LP YIELD IDENTITY:  APY ≈ house_edge × turnover × LP_share
+==============================================================================
+   turnover = annual_wagered_volume / TVL  (how many times capital is recycled)
+
+  edge \ turnover |       2x       5x      10x      25x      50x     100x
+  -----------------------------------------------------------------------
+  h= 1.0%        |     1.4%     3.5%     7.0%    17.5%    35.0%    70.0%
+  h= 2.0%        |     2.8%     7.0%    14.0%    35.0%    70.0%   140.0%
+  h= 4.0%        |     5.6%    14.0%    28.0%    70.0%   140.0%   280.0%
+
+  (LP_share = 70% of gross gaming revenue; rest -> protocol + game devs)
+  INSIGHT: a 2%-edge pool at 25x turnover (35% APY) beats a 4%-edge pool
+  at 5x turnover (14% APY). The lever is CAPITAL VELOCITY, not a bigger rake.
+
+==============================================================================
+2) VARIANCE IS A CAPITAL TAX:  bankroll need ∝ MAX PAYOUT, not avg bet
+==============================================================================
+   Min bankroll B (in multiples of the MAX BET) to hold ruin risk ≤ 1%:
+   B/b ≥ (variance_index / 2h) · ln(1/RoR)
+
+  game                              edge      maxX  var_index   B / maxbet
+  ----------------------------------------------------------------------
+  Dice / coin-flip (2x)             1.0%         2          1         230x
+  Roulette-like (36x)               2.7%        36         34       2,906x
+  Slots (1,000x jackpot)            4.0%     1,000        959      55,209x
+  Crash / high-mult (10,000x)       3.0%    10,000      9,699     744,430x
+  Lottery (1,000,000x)             30.0% 1,000,000    700,000   5,372,695x
+
+  INSIGHT: read this as a CAPACITY ceiling, not a ruin risk. To let a whale
+  bet $X on a 1,000x slot, the pool must hold ~55,000·$X; on a 10,000x crash,
+  ~744,000·$X. With a pool-fraction payout cap the multiplier does NOT blow up
+  yearly LP variance — it caps how big a bet the book can accept. The variance
+  tax is paid in FOREGONE VOLUME (small max bets -> whales go elsewhere), which
+  is exactly the turnover that LP yield depends on. A jackpot lottery is simply
+  un-bankrollable this way and needs a different engine (see report, §lottery).
+
+==============================================================================
+3) NEGATIVE SKEW IS A VOLUME PHENOMENON: the pool is most fragile when young
+==============================================================================
+   With every payout capped at 1% of the pool, no single bet can ruin it.
+   The left tail comes from the random COUNT of big wins (N·p). Same game,
+   two life stages: cold-start (turnover 2x) vs mature (turnover 40x).
+
+  game @ life-stage                      mean  median       p1    P(loss)     worst
+  --------------------------------------------------------------------------------
+  Roulette-like  · cold (2x)              3.8%     3.9%     -7.5%       21.0%     -18.2%
+  Roulette-like  · mature (40x)          75.6%    75.6%     25.5%        0.0%     -14.0%
+  Slots  · cold (2x)                      5.6%     5.6%     -5.8%       12.2%     -16.3%
+  Slots  · mature (40x)                 111.9%   112.0%     61.4%        0.0%       4.9%
+  Crash / high-mult  · cold (2x)          4.2%     4.2%     -7.2%       18.8%     -18.0%
+  Crash / high-mult  · mature (40x)      84.0%    84.0%     33.1%        0.0%     -11.9%
+
+  INSIGHT: the SAME game is dangerous when young and tame when scaled. At cold
+  start a high-multiplier book can post a deeply negative year from a handful
+  of unlucky jackpots; at scale the law of large numbers smooths it. So the
+  honest risk metric is N·p (expected big-hits), not headline APY — and the
+  riskiest moment is precisely when TVL is thin and you're paying emissions to
+  attract it. Couple the max-payout cap to live TVL; never to a fixed number.
+
+==============================================================================
+4) RNG IS A REGRESSIVE TAX: fixed per-bet VRF cost destroys small-bet edge
+==============================================================================
+   Break-even bet = VRF_cost / house_edge  (below it, every bet loses money)
+
+  RNG venue                     h= 1.0%  h= 2.0%  h= 4.0%
+  ----------------------------------------------------------
+  Ethereum L1 ($3-8/req)        $  500.00  $  250.00  $  125.00
+  Generic L2 ($0.05-0.30)       $   15.00  $    7.50  $    3.75
+  App-L3 / batched ($0.002)     $    0.20  $    0.10  $    0.05
+
+  Read as: minimum bet that is profitable AFTER paying for verifiable RNG.
+  INSIGHT: on L1, a 1%-edge dice game needs a $500 minimum bet just to break
+  even on RNG — economically impossible. Verifiable RNG FORCES the product
+  onto cheap L2/L3 or off-chain-commit RNG, which trades away decentralization.
+  It also means casinos make money on RAKE-PER-BET; micro-stakes are a loss.
+
+==============================================================================
+5) SHARED-POOL CONTAGION: governance laxity on ONE game poisons every LP
+==============================================================================
+   A disciplined book caps every payout at 1% of pool. Now one integrated
+   game is allowed a looser cap (lax governance, or a higher-margin 'feature').
+   TVL=$1M, turnover=20x. We report the GROSS house year (pre-LP-split):
+
+  book                                              mean       p1   P(loss)    worst
+  ----------------------------------------------------------------------------------
+  Disciplined: all payouts ≤1% of pool             36.1%    -7.0%      2.5%   -54.0%
+    slots payout cap loosened to 10%               36.2%   -29.5%      9.7%   -91.0%
+    + crash game cap at 20%                        38.2%   -45.8%     13.9%  -133.8%
+
+  INSIGHT: the multiplier itself is safe IF the payout cap scales with the
+  pool. The killer is a single game with a loose cap (or a bug that lets payout
+  exceed intent): it imports a fat left tail into the SHARED bankroll that the
+  dice LPs never agreed to. 'Deep shared liquidity' is also a single correlated
+  point of failure — the pool is only as safe as its loosest cap and its
+  buggiest integrated SDK contract. Isolate sub-pools by variance class, enforce
+  per-game caps in protocol (not governance), and budget for audits per game.
+
+==============================================================================
+6) REAL YIELD vs EMISSIONS: most GambleFi 'APY' is subsidy, not house edge
+==============================================================================
+  Headline APY advertised to LPs: 30%.  Where does it come from?
+
+  phase                           real yield   emissions    % real
+  ------------------------------------------------------------------
+  Cold start (turnover 2x)              2.8%       27.2%        9%
+  Traction (turnover 10x)              14.0%       16.0%       47%
+  Scale (turnover 30x)                 42.0%        0.0%      140%
+
+  INSIGHT: at cold start, ~9 of every 10 'APY' points are token emissions —
+  i.e. dilution, not earnings. That capital is mercenary and leaves when
+  emissions taper, right when a drawdown is most likely. The only durable
+  LP yield is edge×turnover×share; everything above it is borrowed from the
+  token's future. Underwrite the model on REAL yield, treat emissions as CAC.
+
+==============================================================================
+7) FEE WATERFALL: LP is the residual claimant AND the tail-risk bearer
+==============================================================================
+  Per $100 wagered, house edge 2%  ->  GGR = $2.00
+    - verifiable RNG / gas (off the top): $0.10
+    - protocol take (15% of GGR):         $0.30
+    - game dev + frontend (25% of GGR):   $0.50
+    = LP residual:                        $1.10   (55% of GGR)
+
+  INSIGHT: LPs get paid LAST and also absorb 100% of the negative-skew
+  losses. If the protocol over-rewards the DEMAND side (devs/frontends) to win
+  the two-sided market, LP comp falls below the tail-risk premium and LPs exit
+  at the first crash. Sustainable design: LP must clear risk-free + a tail
+  premium (≈15-25% real) BEFORE you pay distribution. Liquidity is a commodity;
+  do not starve it to subsidize growth — but the real MOAT is distribution.
+
+
+Charts written to simulation/figures/: 01_yield_vs_turnover.png, 02_bankroll_vs_variance.png, 03_lp_return_distributions.png

@@ -1,0 +1,40 @@
+
+$HOUSE MONTHLY CASH-FLOW & DILUTION MODEL
+
+  edge 2%, turnover 18x, TVL 10M -> 600M (logistic), FDV = 8x annual GGR,
+  buyback = 12% of GGR, 50% of emissions sold.
+
+    mo      TVL   annGGR   price     FDV  buyback$/mo   sold$/mo    net$/mo
+  -------------------------------------------------------------------------
+     0     $11M    $4.1M   $0.07    $32M       $0.04M     $0.32M    $-0.28M
+     6     $23M    $8.3M   $0.14    $66M       $0.08M     $0.58M    $-0.50M
+    12     $46M   $16.7M   $0.25   $133M       $0.17M     $1.56M    $-1.39M
+    18     $90M   $32.3M   $0.42   $258M       $0.32M     $2.65M    $-2.32M
+    24    $163M   $58.6M   $0.68   $469M       $0.59M     $3.60M    $-3.01M
+    30    $267M   $96.1M   $1.01   $768M       $0.96M     $5.40M    $-4.44M
+    36    $382M  $137.6M   $1.34  $1100M       $1.38M     $7.13M    $-5.76M
+    42    $478M  $172.0M   $1.55  $1376M       $1.72M     $8.28M    $-6.56M
+    48    $539M  $194.1M   $1.64  $1553M       $1.94M     $4.11M    $-2.17M
+    54    $572M  $205.8M   $1.69  $1647M       $2.06M     $4.22M    $-2.16M
+
+  >>> Buyback NEVER outruns emissions in horizon — emissions too hot or GGR too thin.
+  Cumulative over 60mo:  buyback $61M  vs  sold emissions $249M   (net $-188M)
+  Buyback offsets 24% of cumulative emission sell-pressure.
+
+  INSIGHT: the flip date is the whole ballgame. It is LATE and reflexive —
+  thin early GGR means low FDV, so emitted tokens are worth little (small $
+  sold) BUT the buyback is also tiny, and you are diluting a large % of supply.
+  Levers that pull the flip earlier: lower year-1 emissions, higher turnover,
+  and veHOUSE LOCKING (removes sell-through — see gauge_market_sim.py). Publish
+  this curve; it is the single most honest token-health metric you have.
+
+  SCENARIO COMPARISON — what actually pulls the flip date earlier:
+  scenario                                        flip month  5yr net $M
+  ----------------------------------------------------------------------
+  Base (buyback 80%, no locking, FDV 8x)          never (5y)       -188M
+  + veHOUSE locking removes 60% sell-through            ~m48        -39M
+  + aggressive buyback 95% of take (HYPE-like)          ~m48        -27M
+  + cheaper launch FDV (4x GGR)                         ~m27        +22M
+
+
+Chart -> figures/06_net_flow.png

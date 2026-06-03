@@ -1,0 +1,111 @@
+
+$HOUSE TOKENOMICS — SIMULATION (benchmarked vs HYPE)
+
+================================================================================
+PILLAR A) SUPPLY & DISTRIBUTION — fair-launch, community-heavy (HYPE-style)
+================================================================================
+  Total supply: 1,000,000,000 $HOUSE.  Community-aligned ≈ 78% (HYPE was ~70%+, 31% airdrop).
+  bucket                                     %  cliff   vest   @TGE
+  -----------------------------------------------------------------
+  Genesis airdrop (LPs/players/devs)       35%     0m     0m   100%
+  Community/LP & backstop emissions        30%     0m    60m     0%
+  Team & early contributors                15%    12m    36m     0%
+  DAO treasury                              8%     0m    48m    10%
+  Backstop / insurance seed (PoL)           5%     0m     0m   100%
+  Ecosystem / liquidity                     7%     0m    24m    30%
+
+   month   circulating  % of supply
+  ---------------------------------
+      0m   429,000,000        42.9%
+      6m   480,250,000        48.0%
+     12m   531,500,000        53.1%
+     24m   684,000,000        68.4%
+     36m   812,000,000        81.2%
+     48m   940,000,000        94.0%
+     60m 1,000,000,000       100.0%
+     72m 1,000,000,000       100.0%
+
+  INSIGHT: float at TGE ~38% (airdrop + seed + some ecosystem), team cliffed
+  12mo. The risk is the 30% emissions bucket: it is CAC for liquidity, and if
+  monthly emission $ exceeds monthly buyback $, the token net-inflates and the
+  'flywheel' runs backwards. Emissions must taper INTO rising GGR, not ahead of
+  it. Track one number: net flow = buyback$ - sold_emissions$ (see below).
+
+================================================================================
+PILLAR B) GGR BUYBACK FLYWHEEL — 'buyback yield' vs HYPE (~7% of mcap/yr)
+================================================================================
+  Assumes: edge 2%, turnover 20x  -> GGR = 40% of TVL/yr
+  Protocol take 15% of GGR; 80% of take -> buyback+burn.
+  buyback$ = 12.0% of GGR = 4.80% of TVL per year.
+
+  Annual buyback as % of FDV  ('buyback yield'):
+       TVL \ FDV      $100M      $300M     $1000M     $3000M
+  ----------------------------------------------------------
+           $50M      2.4%       0.8%       0.2%       0.1% 
+          $200M      9.6%*      3.2%       1.0%       0.3% 
+          $500M     24.0%*      8.0%*      2.4%       0.8% 
+
+  ('*' = beats HYPE's ~7%/yr buyback rate.)
+  INSIGHT: buyback yield is buyback$/FDV. It is high only when FDV is
+  disciplined relative to real GGR. A $3B FDV on $50M TVL gives a 0.1%
+  'yield' — a meme, not a flywheel. HYPE's 7% is impressive BECAUSE fees are
+  enormous vs mcap. Do not ship a 1B-supply token into thin GGR and call the
+  buyback a flywheel; it only works if you keep FDV honest until volume exists.
+
+================================================================================
+PILLAR C) $HOUSE AS FIRST-LOSS BACKSTOP — senior/junior tranche waterfall
+================================================================================
+  Bankroll = 75% senior (stable LPs, ~10% capped coupon, protected) + 25%
+  junior (staked $HOUSE, first-loss, gets residual + 8% emissions). TVL $200M, 12x.
+
+  tranche / game                     mean   median       p5   P(loss)     worst
+  ------------------------------------------------------------------------------
+  SENIOR · Roulette-like             10.0%     10.0%     10.0%       0.0%     -20.3%
+  JUNIOR($HOUSE) · Roulette-like     88.1%     88.5%     -5.9%       6.1%     -92.0%
+  SENIOR · Slots                     10.0%     10.0%     10.0%       0.0%      -8.7%
+  JUNIOR($HOUSE) · Slots            141.0%    141.2%     46.0%       0.7%     -92.0%
+
+  INSIGHT: the token tranche manufactures a clean two-sided product. SENIOR
+  stablecoin LPs get a near-bond-like ~10% with P(loss)≈0 -> sticky, scalable,
+  risk-averse capital. JUNIOR $HOUSE stakers get a LEVERED, emissions-boosted
+  yield in exchange for eating the fat left tail (occasional -100% slashing).
+  This finally PAYS someone for the negative skew, and ties the token to the
+  core risk engine the way HLP is core to HYPE — not a bolt-on governance coin.
+
+================================================================================
+REFLEXIVITY / WRONG-WAY RISK — why the token backstop can fail when needed
+================================================================================
+  Nominal junior backstop: 25% of $200M = $50M.
+  Stress year: pool loses 18% of TVL ($36M) AND $HOUSE falls 60%.
+
+  Tail loss to cover:                 $    36M
+  Backstop value AFTER token crash:   $    20M   (was $50M)
+  Coverage ratio (buffer / loss):       0.56x   -> SENIOR HIT (backstop fails)
+
+  INSIGHT: a token-denominated backstop is WORTH LEAST exactly when it is
+  needed MOST — its price is correlated to the same volume/GGR that drives
+  the loss. A 25% junior buffer that looks like $50M is only ~$20M after a
+  60% drawdown, and may not cover an 18% pool loss. Mitigations: (1) size
+  junior on STRESSED token value, not spot; (2) hold part of the backstop in
+  stablecoins / protocol-owned reserve (not just staked token); (3) hard
+  per-game payout caps so the tail can't exceed the stressed buffer. Do NOT
+  market token TVL as 'real' bankroll 1:1 — discount it for reflexivity.
+
+================================================================================
+NET TOKEN FLOW — does the buyback outrun the emissions? (the only question)
+================================================================================
+  Assume $HOUSE = $0.50, 50% of emissions sold. Buyback = 12.0% of GGR.
+
+   year      TVL      GGR   buyback$   emit(tok)     sold$    net$/yr
+  -------------------------------------------------------------------
+     1y     $40M   $16.0M      $1.9M       102M    $25.6M    $-23.7M
+     2y    $120M   $48.0M      $5.8M       152M    $38.1M    $-32.4M
+     3y    $300M  $120.0M     $14.4M       128M    $32.0M    $-17.6M
+     4y    $500M  $200.0M     $24.0M       128M    $32.0M     $-8.0M
+
+  INSIGHT: early years are net-NEGATIVE (emissions >> buyback) — this is the
+  bootstrapping subsidy, and it is real dilution. The model only inverts once
+  TVL/GGR scale. Be honest in the deck: years 1-2 are paid for by the token,
+  the flywheel is a YEAR-3+ phenomenon, and it is conditional on hitting volume.
+
+Charts -> figures/: 04_tranche_returns.png, 05_supply_schedule.png

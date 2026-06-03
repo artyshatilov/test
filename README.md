@@ -9,10 +9,16 @@ from house edge and fees.
 - **[`RESEARCH.md`](./RESEARCH.md)** — the full report: idea, live comparables (Azuro,
   Hyperliquid HLP, GMX GLP, Edgeless, PoolTogether), unit economics, simulation findings,
   business model, risks, and a no-flattery verdict. **Start here.**
+- **[`TOKENOMICS.md`](./TOKENOMICS.md)** — `$HOUSE` token design, benchmarked against HYPE:
+  fair-launch distribution, a GGR buyback flywheel, and the token-as-first-loss-backstop
+  tranche (plus the reflexivity/wrong-way risk most designs hide).
 - **[`simulation/casino_pool_sim.py`](./simulation/casino_pool_sim.py)** — Monte Carlo +
   closed-form model of the pool economics. Prints all tables; writes charts.
-- `simulation/sim_output.txt` — captured run output.
-- `simulation/figures/` — charts (yield vs turnover, capital-vs-variance, LP return skew).
+- **[`simulation/tokenomics_sim.py`](./simulation/tokenomics_sim.py)** — token model:
+  buyback yield vs HYPE, senior/junior tranche waterfall, reflexivity stress, supply schedule.
+- `simulation/sim_output.txt`, `simulation/tokenomics_output.txt` — captured run output.
+- `simulation/figures/` — charts (yield vs turnover, capital-vs-variance, LP return skew,
+  tranche returns, supply schedule).
 
 ## Run
 ```bash

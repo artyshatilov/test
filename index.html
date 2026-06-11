@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TON Flip — Coinflip</title>
+<style>
+  :root {
+    --bg: #0c0c0a;
+    --card: #1b1b19;
+    --card-2: #242422;
+    --chip: #1f1f1d;
+    --text: #ffffff;
+    --muted: #8d8d87;
+    --muted-2: #5f5f59;
+    --gold: #f7c531;
+    --gold-dark: #b8860b;
+    --blue: #339cf4;
+    --teal: #45e0d8;
+    --teal-dark: #1d9e96;
+    --orange: #ffb938;
+    --orange-dark: #c87b16;
+    --green: #4caf50;
+    --radius: 16px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body { height: 100%; }
+
+  body {
+    background: #000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 430px;
+    min-height: 100vh;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* faint coin watermark pattern */
+  .app::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><circle cx="40" cy="40" r="26" fill="none" stroke="%23f7c531" stroke-width="2"/><text x="40" y="49" font-size="26" font-family="Arial" font-weight="bold" fill="%23f7c531" text-anchor="middle">$</text></svg>');
+    background-size: 120px 120px;
+    opacity: 0.025;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app > * { position: relative; z-index: 1; }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 12px 10px;
+  }
+
+  .history-strip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow: hidden;
+    flex: 1;
+    mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+  }
+
+  .mini-coin {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .mini-coin.h {
+    background: radial-gradient(circle at 35% 30%, #ffd06b, var(--orange) 65%);
+    color: var(--orange-dark);
+    box-shadow: inset 0 0 0 2px rgba(200,123,22,.55);
+  }
+  .mini-coin.t {
+    background: radial-gradient(circle at 35% 30%, #8df0ea, var(--teal) 65%);
+    color: var(--teal-dark);
+    box-shadow: inset 0 0 0 2px rgba(29,158,150,.55);
+  }
+  .mini-coin.new { animation: pop-in .35s ease; }
+  @keyframes pop-in { from { transform: scale(0); } to { transform: scale(1); } }
+
+  .connect-btn {
+    flex: 0 0 auto;
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 9px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: filter .15s;
+  }
+  .connect-btn:active { filter: brightness(.85); }
+
+  /* ---------- Main scroll area ---------- */
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 12px 84px;
+    scrollbar-width: none;
+  }
+  main::-webkit-scrollbar { display: none; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ---------- 4x mode toggle ---------- */
+  .mode-row { display: flex; justify-content: center; margin: 6px 0 12px; }
+
+  .mode-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    border-radius: 20px;
+    padding: 6px 8px 6px 14px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .mode-pill span { font-size: 14px; font-weight: 600; color: #d9d9d4; }
+
+  .switch {
+    width: 44px;
+    height: 26px;
+    border-radius: 13px;
+    background: #3a3a37;
+    position: relative;
+    transition: background .2s;
+  }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform .2s;
+  }
+  .mode-pill.on .switch { background: #34c759; }
+  .mode-pill.on .switch::after { transform: translateX(18px); }
+
+  /* ---------- Info card ---------- */
+  .info-card {
+    display: flex;
+    gap: 10px;
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: #c9c9c3;
+    margin-bottom: 18px;
+  }
+  .info-card .i-icon {
+    flex: 0 0 auto;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 1.5px solid var(--muted);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    font-style: normal;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+  .info-card b { color: #fff; }
+
+  /* ---------- Coins ---------- */
+  .coins-row {
+    display: flex;
+    justify-content: center;
+    gap: 42px;
+    margin: 6px 0 6px;
+  }
+
+  .coin-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+  .coin {
+    width: 84px;
+    height: 84px;
+    cursor: pointer;
+    perspective: 600px;
+    border-radius: 50%;
+    transition: transform .15s;
+  }
+  .coin-col.selected .coin { transform: scale(1.08); }
+  .coin-col.selected .coin .face { box-shadow: 0 0 0 3px rgba(255,255,255,.85), 0 6px 18px rgba(0,0,0,.5); }
+
+  .coin-inner {
+    width: 100%; height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform .12s;
+  }
+  .coin.flipping .coin-inner { animation: spin .25s linear infinite; }
+  @keyframes spin { from { transform: rotateY(0); } to { transform: rotateY(360deg); } }
+
+  .face {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 38px;
+    font-weight: 800;
+    backface-visibility: hidden;
+    box-shadow: 0 6px 18px rgba(0,0,0,.5);
+  }
+  .face.back { transform: rotateY(180deg); }
+
+  .face.heads {
+    background: radial-gradient(circle at 35% 28%, #ffe09b, var(--orange) 60%, #e89a1f);
+    color: var(--orange-dark);
+    box-shadow: inset 0 0 0 5px rgba(200,123,22,.45), 0 6px 18px rgba(0,0,0,.5);
+  }
+  .face.tails {
+    background: radial-gradient(circle at 35% 28%, #aef5f0, var(--teal) 60%, #2bbfb6);
+    color: var(--teal-dark);
+    box-shadow: inset 0 0 0 5px rgba(29,158,150,.45), 0 6px 18px rgba(0,0,0,.5);
+  }
+
+  .reflip {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--card);
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform .3s;
+  }
+  .reflip:active { transform: rotate(-180deg); }
+
+  /* ---------- Bet chooser ---------- */
+  .bet-label {
+    text-align: center;
+    font-size: 14px;
+    color: #d9d9d4;
+    margin: 16px 0 12px;
+  }
+  .bet-label small { color: var(--muted-2); font-size: 12px; }
+
+  .bet-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .bet-chip {
+    position: relative;
+    background: var(--chip);
+    border: none;
+    border-radius: 22px;
+    padding: 11px 0;
+    color: #e6e6e0;
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .bet-chip svg { width: 16px; height: 16px; }
+  .bet-chip .ton-stroke { stroke: #9a9a93; }
+  .bet-chip.selected {
+    background: #fff;
+    color: #111;
+  }
+  .bet-chip.selected .ton-stroke { stroke: #444; }
+  .bet-chip .star {
+    display: none;
+    position: absolute;
+    top: -7px;
+    right: -2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--gold);
+    color: #7a5800;
+    font-size: 12px;
+    align-items: center;
+    justify-content: center;
+  }
+  .bet-chip.selected .star { display: flex; }
+
+  /* ---------- Bet on ---------- */
+  .bet-on {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .bet-on .lbl { font-size: 14px; color: #d9d9d4; }
+  .avatar-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+  }
+  .avatar-btn .chev { font-size: 11px; color: var(--muted); }
+
+  .avatar-menu {
+    display: none;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--card-2);
+    border: 1px solid #34342f;
+    border-radius: 14px;
+    padding: 8px;
+    gap: 6px;
+    z-index: 30;
+    box-shadow: 0 8px 24px rgba(0,0,0,.6);
+  }
+  .avatar-menu.open { display: flex; }
+  .avatar-menu button {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    padding: 4px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .avatar-menu button:hover { background: #34342f; }
+
+  /* ---------- BET button ---------- */
+  .bet-btn {
+    width: 100%;
+    border: none;
+    border-radius: 14px;
+    padding: 16px;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: .5px;
+    color: #3d2c00;
+    background: linear-gradient(180deg, #ffd84d 0%, #f6bd16 100%);
+    box-shadow: 0 4px 14px rgba(247,197,49,.25), inset 0 1px 0 rgba(255,255,255,.45);
+    cursor: pointer;
+    margin-bottom: 16px;
+    transition: filter .15s, transform .1s;
+  }
+  .bet-btn:active { filter: brightness(.9); transform: scale(.985); }
+  .bet-btn:disabled { filter: grayscale(.6) brightness(.7); cursor: default; }
+
+  /* ---------- COINS promo ---------- */
+  .promo {
+    position: relative;
+    background: linear-gradient(180deg, #161614, #11110f);
+    border: 1px solid #26261f;
+    border-radius: var(--radius);
+    padding: 18px 16px 22px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .promo .intro {
+    color: var(--gold);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .promo .big {
+    color: var(--gold);
+    font-size: 46px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    line-height: 1.1;
+    text-shadow: 0 0 24px rgba(247,197,49,.35);
+  }
+  .promo .i-icon {
+    position: absolute;
+    top: 12px; right: 12px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid var(--muted);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    font-style: normal;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .promo .floaters { position: absolute; inset: 0; pointer-events: none; }
+  .floater {
+    position: absolute;
+    color: var(--gold);
+    font-size: 14px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    animation: bob 3s ease-in-out infinite;
+  }
+  .floater em { font-style: normal; font-size: 18px; }
+  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+  /* ---------- Recent flips ---------- */
+  .recent-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 2px 10px;
+  }
+  .recent-head .title { color: var(--muted); font-size: 14px; font-weight: 600; }
+  .recent-head .stat { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: #d9d9d4; }
+  .recent-head .stat .mini-coin { width: 20px; height: 20px; font-size: 10px; }
+
+  .feed { display: flex; flex-direction: column; gap: 10px; }
+
+  .feed-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--card);
+    border-radius: 14px;
+    padding: 10px 12px;
+    animation: slide-in .3s ease;
+  }
+  @keyframes slide-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+  .feed-row .av {
+    flex: 0 0 auto;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: #173a23;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+  }
+  .feed-row .who { flex: 1; min-width: 0; }
+  .feed-row .name { font-size: 14px; font-weight: 700; }
+  .feed-row .sub { font-size: 12px; color: var(--muted); }
+  .feed-row .right { text-align: right; flex: 0 0 auto; }
+  .feed-row .amt { display: flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: 14px; font-weight: 700; color: #d9d9d4; }
+  .feed-row .amt svg { width: 13px; height: 13px; }
+  .feed-row .amt .ton-stroke { stroke: #9a9a93; }
+  .feed-row .gain { font-size: 12px; font-weight: 700; }
+  .feed-row .gain.win { color: var(--gold); }
+  .feed-row .gain.loss { color: #e05c5c; }
+
+  .chat-row { display: flex; align-items: flex-end; gap: 8px; padding: 0 4px; }
+  .chat-row .bubble {
+    background: #ffe08a;
+    color: #4a3a00;
+    border-radius: 14px 14px 14px 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    animation: slide-in .3s ease;
+  }
+  .chat-row .bubble.green { background: #a8e6a1; color: #1d4a18; }
+  .chat-row .trophy { font-size: 16px; }
+
+  /* ---------- Floating chat ---------- */
+  .chat-fab {
+    position: absolute;
+    right: 14px;
+    bottom: 80px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #fff;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,.5);
+    z-index: 20;
+  }
+
+  /* ---------- Tab bar ---------- */
+  nav {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #161614;
+    border-top: 1px solid #232320;
+    display: flex;
+    padding: 8px 0 14px;
+    z-index: 25;
+  }
+  .tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--muted-2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .tab svg { width: 22px; height: 22px; fill: currentColor; }
+  .tab.active { color: #fff; }
+
+  /* ---------- Toast ---------- */
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 100px;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--card-2);
+    border: 1px solid #34342f;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 12px 20px;
+    border-radius: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s, transform .25s;
+    z-index: 40;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.win { border-color: rgba(247,197,49,.5); color: var(--gold); }
+  .toast.loss { border-color: rgba(224,92,92,.5); color: #e05c5c; }
+
+  /* ---------- Secondary views ---------- */
+  .placeholder-view { padding-top: 8px; }
+  .placeholder-view h2 { font-size: 22px; margin: 8px 2px 14px; }
+  .list-card { background: var(--card); border-radius: var(--radius); padding: 4px 14px; }
+  .list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 0;
+    border-bottom: 1px solid #262622;
+    font-size: 14px;
+  }
+  .list-item:last-child { border-bottom: none; }
+  .list-item .rank { width: 22px; color: var(--muted); font-weight: 700; }
+  .list-item .grow { flex: 1; font-weight: 600; }
+  .list-item .val { color: var(--gold); font-weight: 700; display: flex; align-items: center; gap: 4px; }
+  .earn-banner {
+    background: linear-gradient(135deg, #2a230a, #161614);
+    border: 1px solid rgba(247,197,49,.3);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .earn-banner .big { color: var(--gold); font-size: 26px; font-weight: 900; }
+  .earn-banner p { color: var(--muted); font-size: 13px; margin-top: 6px; line-height: 1.4; }
+  .copy-btn {
+    margin-top: 12px;
+    background: var(--gold);
+    color: #3d2c00;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-weight: 800;
+    font-size: 14px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header: flip history + connect wallet -->
+  <header>
+    <div class="history-strip" id="historyStrip"></div>
+    <button class="connect-btn" id="connectBtn">Connect wallet</button>
+  </header>
+
+  <main id="main">
+
+    <!-- ============ FLIP VIEW ============ -->
+    <section class="view active" id="view-flip">
+
+      <div class="mode-row">
+        <div class="mode-pill on" id="modePill">
+          <span>4x mode</span>
+          <div class="switch"></div>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <i class="i-icon">i</i>
+        <div id="infoText">In <b>x4 mode</b> you can bet on two flips in a row to maximize your potential win.</div>
+      </div>
+
+      <div class="coins-row">
+        <div class="coin-col selected" data-side="H" id="colH">
+          <div class="coin" id="coinH">
+            <div class="coin-inner">
+              <div class="face heads front">H</div>
+              <div class="face tails back">T</div>
+            </div>
+          </div>
+          <button class="reflip" title="Re-flip">&#x21bb;</button>
+        </div>
+        <div class="coin-col" data-side="T" id="colT">
+          <div class="coin" id="coinT">
+            <div class="coin-inner">
+              <div class="face tails front">T</div>
+              <div class="face heads back">H</div>
+            </div>
+          </div>
+          <button class="reflip" title="Re-flip">&#x21bb;</button>
+        </div>
+      </div>
+
+      <div class="bet-label">Choose your bet <small>(+ fees)</small></div>
+
+      <div class="bet-grid" id="betGrid">
+        <button class="bet-chip" data-amt="0.35"></button>
+        <button class="bet-chip selected" data-amt="0.75"></button>
+        <button class="bet-chip" data-amt="1"></button>
+        <button class="bet-chip" data-amt="2.5"></button>
+        <button class="bet-chip" data-amt="5"></button>
+        <button class="bet-chip" data-amt="10"></button>
+      </div>
+
+      <div class="bet-on" style="position:relative;">
+        <span class="lbl">Bet on</span>
+        <button class="avatar-btn" id="avatarBtn">
+          <span id="avatarEmoji">🐳</span>
+          <span class="chev">▼</span>
+        </button>
+        <div class="avatar-menu" id="avatarMenu">
+          <button>🐳</button><button>🦈</button><button>🐙</button><button>🚀</button><button>🤑</button>
+        </div>
+      </div>
+
+      <button class="bet-btn" id="betBtn">BET</button>
+
+      <div class="promo">
+        <i class="i-icon">i</i>
+        <div class="intro">INTRODUCING</div>
+        <div class="big">COINS</div>
+        <div class="floaters">
+          <div class="floater" style="top:14px;  right:148px; animation-delay:0s;">+75 <em>🤑</em></div>
+          <div class="floater" style="top:22px;  right:44px;  animation-delay:.4s; font-size:17px;">+150 <em>😍</em></div>
+          <div class="floater" style="top:58px;  right:108px; animation-delay:.8s;">+42 <em>🤩</em></div>
+          <div class="floater" style="top:62px;  right:38px;  animation-delay:1.2s;">+50 <em>🥳</em></div>
+          <div class="floater" style="top:92px;  right:78px;  animation-delay:1.6s; font-size:12px;">+15 <em>😎</em></div>
+        </div>
+      </div>
+
+      <div class="recent-head">
+        <span class="title">Recent flips</span>
+        <span class="stat"><span class="mini-coin h">H</span> <span id="headsPct">49%</span></span>
+      </div>
+
+      <div class="feed" id="feed"></div>
+    </section>
+
+    <!-- ============ EARN VIEW ============ -->
+    <section class="view placeholder-view" id="view-earn">
+      <h2>Earn</h2>
+      <div class="earn-banner">
+        <div class="big">Invite &amp; earn 10%</div>
+        <p>Share your referral link and earn 10% of the platform fee from every flip your friends make. Paid instantly in TON.</p>
+        <button class="copy-btn" id="copyRef">Copy referral link</button>
+      </div>
+      <div class="list-card">
+        <div class="list-item"><span class="grow">Friends invited</span><span class="val">12</span></div>
+        <div class="list-item"><span class="grow">Total earned</span><span class="val">💎 8.4</span></div>
+        <div class="list-item"><span class="grow">Coins bonus</span><span class="val">🪙 1,250</span></div>
+      </div>
+    </section>
+
+    <!-- ============ TOP VIEW ============ -->
+    <section class="view placeholder-view" id="view-top">
+      <h2>Top players</h2>
+      <div class="list-card">
+        <div class="list-item"><span class="rank">1</span><span>🐳</span><span class="grow">Tidy Whale</span><span class="val">💎 1,204</span></div>
+        <div class="list-item"><span class="rank">2</span><span>🦈</span><span class="grow">Sharky</span><span class="val">💎 987</span></div>
+        <div class="list-item"><span class="rank">3</span><span>🚀</span><span class="grow">MoonFlip</span><span class="val">💎 845</span></div>
+        <div class="list-item"><span class="rank">4</span><span>🤑</span><span class="grow">EZ_Win</span><span class="val">💎 612</span></div>
+        <div class="list-item"><span class="rank">5</span><span>🐙</span><span class="grow">Kraken99</span><span class="val">💎 540</span></div>
+        <div class="list-item"><span class="rank">6</span><span>😎</span><span class="grow">CoolHands</span><span class="val">💎 433</span></div>
+        <div class="list-item"><span class="rank">7</span><span>🥳</span><span class="grow">FlipParty</span><span class="val">💎 391</span></div>
+      </div>
+    </section>
+
+    <!-- ============ PROFILE VIEW ============ -->
+    <section class="view placeholder-view" id="view-profile">
+      <h2>Profile</h2>
+      <div class="list-card" style="margin-bottom:14px;">
+        <div class="list-item"><span style="font-size:28px;">🐳</span><span class="grow">@tidy_whale<br><small style="color:var(--muted);font-weight:400;">Member since May 2026</small></span></div>
+      </div>
+      <div class="list-card">
+        <div class="list-item"><span class="grow">Total flips</span><span class="val" id="statFlips">128</span></div>
+        <div class="list-item"><span class="grow">Win rate</span><span class="val" id="statWinrate">51%</span></div>
+        <div class="list-item"><span class="grow">Wagered</span><span class="val">💎 96.5</span></div>
+        <div class="list-item"><span class="grow">Coins balance</span><span class="val">🪙 3,420</span></div>
+      </div>
+    </section>
+
+  </main>
+
+  <button class="chat-fab" id="chatFab">💬</button>
+
+  <!-- Tab bar -->
+  <nav>
+    <button class="tab active" data-view="flip">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><text x="12" y="16" font-size="10" font-weight="bold" text-anchor="middle" fill="currentColor">H</text></svg>
+      Flip
+    </button>
+    <button class="tab" data-view="earn">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><text x="12" y="16.5" font-size="12" font-weight="bold" text-anchor="middle" fill="currentColor">$</text></svg>
+      Earn
+    </button>
+    <button class="tab" data-view="top">
+      <svg viewBox="0 0 24 24"><path d="M5 4h14v3a5 5 0 0 1-4 4.9V14h2v2H7v-2h2v-2.1A5 5 0 0 1 5 7V4zm-3 1h2v2a3 3 0 0 1-2 2.83V5zm20 0h-2v2a3 3 0 0 0 2 2.83V5zM8 18h8v2H8z"/></svg>
+      Top
+    </button>
+    <button class="tab" data-view="profile">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6v1H4v-1z"/></svg>
+      Profile
+    </button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(() => {
+  // TON diamond icon (inline SVG, stroke colored via .ton-stroke)
+  const tonSvg = amt => `
+    <svg viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9.5" class="ton-stroke" stroke-width="1.8"/>
+      <path d="M8 8.5h8L12 17 8 8.5z" class="ton-stroke" stroke-width="1.6" stroke-linejoin="round"/>
+    </svg>${amt}`;
+
+  // ---------- State ----------
+  const state = {
+    x4: true,
+    side: 'H',
+    bet: 0.75,
+    avatar: '🐳',
+    history: ['H','T','T','T','T','T','T','T','H','H'],
+    flipping: false,
+    totalFlips: 128,
+    wins: 65,
+  };
+
+  const $ = id => document.getElementById(id);
+
+  // ---------- History strip ----------
+  function renderHistory(animateLast = false) {
+    $('historyStrip').innerHTML = state.history
+      .slice(-12)
+      .map((s, i, arr) => `<div class="mini-coin ${s.toLowerCase()}${animateLast && i === arr.length - 1 ? ' new' : ''}">${s}</div>`)
+      .join('');
+    const heads = state.history.filter(s => s === 'H').length;
+    $('headsPct').textContent = Math.round(heads / state.history.length * 100) + '%';
+  }
+
+  // ---------- Bet chips ----------
+  document.querySelectorAll('.bet-chip').forEach(chip => {
+    chip.innerHTML = tonSvg(chip.dataset.amt) + '<span class="star">★</span>';
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('.bet-chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      state.bet = parseFloat(chip.dataset.amt);
+    });
+  });
+
+  // ---------- Side selection ----------
+  ['colH', 'colT'].forEach(id => {
+    $(id).querySelector('.coin').addEventListener('click', () => {
+      state.side = $(id).dataset.side;
+      $('colH').classList.toggle('selected', state.side === 'H');
+      $('colT').classList.toggle('selected', state.side === 'T');
+    });
+  });
+
+  // Small re-flip buttons: quick cosmetic spin
+  document.querySelectorAll('.reflip').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const coin = e.currentTarget.closest('.coin-col').querySelector('.coin');
+      coin.classList.add('flipping');
+      setTimeout(() => coin.classList.remove('flipping'), 500);
+    });
+  });
+
+  // ---------- 4x mode ----------
+  $('modePill').addEventListener('click', () => {
+    state.x4 = !state.x4;
+    $('modePill').classList.toggle('on', state.x4);
+    $('infoText').innerHTML = state.x4
+      ? 'In <b>x4 mode</b> you can bet on two flips in a row to maximize your potential win.'
+      : 'Classic mode: pick a side, flip once and <b>double</b> your bet if you guess right.';
+  });
+
+  // ---------- Avatar dropdown ----------
+  $('avatarBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    $('avatarMenu').classList.toggle('open');
+  });
+  $('avatarMenu').addEventListener('click', e => {
+    if (e.target.tagName === 'BUTTON') {
+      state.avatar = e.target.textContent;
+      $('avatarEmoji').textContent = state.avatar;
+      $('avatarMenu').classList.remove('open');
+    }
+  });
+  document.addEventListener('click', () => $('avatarMenu').classList.remove('open'));
+
+  // ---------- Toast ----------
+  let toastTimer;
+  function toast(msg, cls = '') {
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + cls;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // ---------- Feed ----------
+  const names = ['Tidy Whale', 'Sharky', 'MoonFlip', 'EZ_Win', 'Kraken99', 'CoolHands', 'FlipParty', 'DiamondFin'];
+  const avatars = ['🐳', '🦈', '🚀', '🤑', '🐙', '😎', '🥳', '💎'];
+  const amounts = [0.35, 0.75, 1, 2.5, 5, 10];
+
+  function feedBetRow({ name, avatar, amt, win, coins }) {
+    const row = document.createElement('div');
+    row.className = 'feed-row';
+    row.innerHTML = `
+      <div class="av">${avatar}</div>
+      <div class="who">
+        <div class="name">${name}</div>
+        <div class="sub">${win ? 'won the flip' : 'lost the flip'}</div>
+      </div>
+      <div class="right">
+        <div class="amt">${tonSvg(amt)}</div>
+        <div class="gain ${win ? 'win' : 'loss'}">${win ? '+' + coins + ' 🪙' : '−' + amt + ' 💎'}</div>
+      </div>`;
+    return row;
+  }
+
+  function feedChatRow(text, green, trophy) {
+    const row = document.createElement('div');
+    row.className = 'chat-row';
+    row.innerHTML = `<div class="bubble${green ? ' green' : ''}">${text}</div>${trophy ? '<span class="trophy">🏆</span>' : ''}`;
+    return row;
+  }
+
+  function addFeed(node) {
+    const feed = $('feed');
+    feed.prepend(node);
+    while (feed.children.length > 14) feed.lastChild.remove();
+  }
+
+  // Seed the feed to match the screenshot vibe
+  addFeed(feedBetRow({ name: 'CoolHands', avatar: '😎', amt: 1, win: false, coins: 0 }));
+  addFeed(feedChatRow('gg, next one is mine', true, false));
+  addFeed(feedBetRow({ name: 'Tidy Whale', avatar: '🐳', amt: 2.5, win: true, coins: 5 }));
+  addFeed(feedChatRow('LEG! EZ $$$', false, false));
+  addFeed(feedChatRow('EZ win!', true, true));
+
+  // Simulated live activity from other players
+  setInterval(() => {
+    if (Math.random() < 0.55) {
+      const i = Math.floor(Math.random() * names.length);
+      const win = Math.random() < 0.5;
+      const amt = amounts[Math.floor(Math.random() * amounts.length)];
+      addFeed(feedBetRow({ name: names[i], avatar: avatars[i], amt, win, coins: Math.round(amt * 4) }));
+    } else {
+      const msgs = ['EZ win!', 'LEG! EZ $$$', 'rigged 😤', 'to the moon 🚀', 'one more...', 'whale szn 🐳'];
+      addFeed(feedChatRow(msgs[Math.floor(Math.random() * msgs.length)], Math.random() < 0.5, Math.random() < 0.2));
+    }
+  }, 6000);
+
+  // ---------- BET ----------
+  $('betBtn').addEventListener('click', () => {
+    if (state.flipping) return;
+    state.flipping = true;
+    const btn = $('betBtn');
+    btn.disabled = true;
+    btn.textContent = 'FLIPPING…';
+
+    const coins = [$('coinH'), $('coinT')];
+    coins.forEach(c => c.classList.add('flipping'));
+
+    const flips = state.x4 ? 2 : 1;
+    const results = Array.from({ length: flips }, () => Math.random() < 0.5 ? 'H' : 'T');
+
+    setTimeout(() => {
+      coins.forEach(c => c.classList.remove('flipping'));
+      results.forEach(r => state.history.push(r));
+      renderHistory(true);
+
+      const won = results.every(r => r === state.side);
+      const mult = state.x4 ? 4 : 2;
+      const payout = +(state.bet * mult).toFixed(2);
+      const coinsEarned = Math.round(state.bet * mult * 2);
+
+      state.totalFlips += flips;
+      if (won) state.wins++;
+      $('statFlips').textContent = state.totalFlips;
+      $('statWinrate').textContent = Math.round(state.wins / state.totalFlips * 100) + '%';
+
+      addFeed(feedBetRow({ name: 'You', avatar: state.avatar, amt: state.bet, win: won, coins: coinsEarned }));
+      toast(
+        won ? `🎉 ${results.join(' ')} — you won ${payout} TON!` : `😬 ${results.join(' ')} — you lost ${state.bet} TON`,
+        won ? 'win' : 'loss'
+      );
+
+      btn.disabled = false;
+      btn.textContent = 'BET';
+      state.flipping = false;
+    }, 1600);
+  });
+
+  // ---------- Tabs ----------
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      $('view-' + tab.dataset.view).classList.add('active');
+      $('main').scrollTop = 0;
+    });
+  });
+
+  // ---------- Misc buttons ----------
+  $('connectBtn').addEventListener('click', () => {
+    const b = $('connectBtn');
+    if (b.dataset.connected) {
+      delete b.dataset.connected;
+      b.textContent = 'Connect wallet';
+    } else {
+      b.dataset.connected = '1';
+      b.textContent = 'UQDk…x4Tz 💎 12.40';
+    }
+  });
+
+  $('chatFab').addEventListener('click', () => toast('Chat coming soon 💬'));
+  document.getElementById('copyRef')?.addEventListener('click', () => toast('Referral link copied ✔'));
+
+  renderHistory();
+})();
+</script>
+</body>
+</html>

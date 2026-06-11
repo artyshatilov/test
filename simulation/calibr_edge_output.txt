@@ -1,0 +1,73 @@
+
+CALIBR — PREDICTION-MARKET EDGE & CALIBRATION SIMULATION
+Companion to CALIBR.md §5-§6. All figures illustrative; tune CONFIG.
+
+==============================================================================
+1. REALIZED EDGE = STATED EDGE - CALIBRATION ERROR  (per $1 contract)
+==============================================================================
+Strategy believes p - q = +5%. We vary how wrong p is vs the truth pi.
+(no frictions yet)
+
+  market q = 0.50   stated view p = 0.55   (stated edge = +0.05)
+
+    calib error (p-pi) |  true pi | realized edge (pi-q) | verdict
+  --------------------------------------------------------------------------
+                 -0.03 |     0.58 |                +0.08 | edge survives
+                 +0.00 |     0.55 |                +0.05 | edge survives
+                 +0.02 |     0.53 |                +0.03 | edge survives
+                 +0.05 |     0.50 |                +0.00 | EDGE FLIPS NEGATIVE
+                 +0.08 |     0.47 |                -0.03 | EDGE FLIPS NEGATIVE
+
+  Read: a +5c stated edge is erased by a 5-point overconfidence (p-pi=0.05),
+  and goes negative beyond it. Overconfident models don't just earn less.
+
+==============================================================================
+2. WHAT'S LEFT AFTER SPREAD + RESOLUTION RISK
+==============================================================================
+  market q=0.50, view p=0.55, eff_spread=0.02, resolve_risk=3%
+
+   true pi |  gross edge |  - spread |  - resolve |  net/contract
+  ----------------------------------------------------------------------
+      0.55 |      +0.050 |    +0.030 |     +0.013 |        +0.013
+      0.53 |      +0.030 |    +0.010 |     -0.006 |        -0.006
+      0.51 |      +0.010 |    -0.010 |     -0.025 |        -0.025
+      0.50 |      +0.000 |    -0.020 |     -0.035 |        -0.035
+
+  If well-calibrated (pi=0.55): net ≈ +0.013/contract on 0.52 risked
+  → ~+2.6% per trade, ~+10% APR at 3-mo lockup (GROSS of fails).
+  Spread + resolution risk routinely halve a headline edge.
+
+==============================================================================
+3. FRACTIONAL KELLY: A TRUE EDGE COMPOUNDS, A FAKE EDGE SIZES INTO RUIN
+==============================================================================
+  q=0.50, sizing as if p=0.55 (believed +5%), 100 sequential bets, 1/4 Kelly
+
+                    scenario |  true p |  stake f |  median x | P(down 50%)
+  --------------------------------------------------------------------------
+            genuine +5% edge |   0.550 |    0.025 |      1.24 |        0.0%
+           half-real (+2.5%) |   0.525 |    0.025 |      1.13 |        0.1%
+         no edge (efficient) |   0.500 |    0.025 |      0.97 |        0.3%
+       anti-edge (overconf.) |   0.480 |    0.025 |      0.88 |        1.0%
+
+  Same sizing logic; only calibration differs. Kelly rewards a real edge and
+  punishes a believed-but-false one — sizing is only as good as your view.
+
+==============================================================================
+4. PORTFOLIO MONTE-CARLO  (many markets, a realistic mixed book)
+==============================================================================
+  Each market: q ~ U(0.2,0.8); the strat's view p = q + signal. We test a
+  GOOD forecaster (small real edge, well-calibrated) vs an OVERCONFIDENT one.
+
+        forecaster | mean/contract |  win rate | % markets +EV
+  ----------------------------------------------------------------
+   well-calibrated |       +0.0297 |     55.0% |         88.1%
+     overconfident |       -0.0082 |     51.2% |         55.2%
+
+  Same signals, same selection rule. A 4-point calibration bias turns a
+  profitable book into a losing one — even though the strategy 'looks' identical.
+
+==============================================================================
+TAKEAWAY: realized edge = calibration, not confidence. Spread + resolution
+risk halve headline edges, and Kelly sizing amplifies whichever you actually
+have. The product's job is to MEASURE this honestly, not to promise alpha.
+==============================================================================

@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>BREAK — provably-fair billiards</title>
+<!--
+  ============================================================================
+  RTP / FAIRNESS PROOF (verified before shipping)
+  ----------------------------------------------------------------------------
+  P = [0.104357,0.254826,0.290383,0.204844,0.100040,0.035828,0.009721]
+  1) P sums to 0.999999 (renormalized to exactly 1.0 at runtime).
+  2) winProb(N) = N==0 ? P[0] : sum(P[N..6]).
+     MULT(N)    = 0.95 / winProb(N).
+     => EV(N)   = winProb(N) * MULT(N) = 0.95 for EVERY N. House edge 5%, RTP 95.00%.
+     Multipliers: 0->9.10x  >=1->1.06x  >=2->1.48x  >=3->2.71x
+                  >=4->6.53x >=5->20.86x >=6->97.73x   (match the reference)
+  3) The outcome C is DRAWN from P first. The break physics is presentation only:
+     - At the end of BURST we pick the C balls already pointed most directly at a
+       pocket and give them guaranteed-arrival velocities + "clear" flag.
+     - CAPTURE IS GATED TO WINNERS ONLY: a losing ball can never be pocketed even
+       if it rolls over a hole. Therefore the VISIBLE sunk count == drawn C, always.
+     Because the money settles on C (the RNG draw), not on the simulation, the
+     95% RTP can never drift no matter how the balls bounce.
+  ============================================================================
+-->
+<style>
+  :root{
+    --bg:#070b08;
+    --panel:#0d130f;
+    --panel2:#111a13;
+    --felt:#0f3d28;
+    --line:#1d2a21;
+    --gold:#e9c25a;
+    --gold2:#f6d98a;
+    --txt:#cfe0d4;
+    --dim:#6f8678;
+    --win:#5fe39a;
+    --miss:#ff6b6b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden;}
+  #app{display:flex;flex-direction:column;height:100%;width:100%;}
+  #stage{position:relative;flex:1 1 auto;min-height:0;background:
+    radial-gradient(120% 90% at 50% 30%,#0c140f 0%,#060a07 100%);}
+  #gl{display:block;width:100%;height:100%;}
+
+  /* HUD over canvas */
+  #hud{position:absolute;inset:0;pointer-events:none;}
+  #title{position:absolute;top:10px;left:14px;letter-spacing:.42em;font-size:12px;
+    color:var(--dim);font-weight:700;}
+  #multBig{position:absolute;top:6px;right:14px;text-align:right;}
+  #multBig .m{font-size:34px;font-weight:700;color:var(--gold);
+    text-shadow:0 0 18px rgba(233,194,90,.25);line-height:1;}
+  #multBig .lbl{font-size:10px;color:var(--dim);letter-spacing:.2em;}
+  #banner{position:absolute;left:50%;top:14px;transform:translateX(-50%);
+    padding:8px 14px;border:1px solid var(--line);border-radius:10px;
+    background:rgba(8,14,10,.72);font-size:13px;letter-spacing:.04em;
+    opacity:0;transition:opacity .25s, transform .25s;white-space:nowrap;}
+  #banner.show{opacity:1;transform:translateX(-50%) translateY(2px);}
+  #banner.win{color:var(--win);border-color:#1f6b46;}
+  #banner.miss{color:var(--miss);border-color:#6b2424;}
+  #cosmetic{position:absolute;left:14px;bottom:10px;font-size:10px;color:var(--dim);
+    letter-spacing:.03em;max-width:70%;}
+
+  /* control deck */
+  #deck{flex:0 0 auto;background:linear-gradient(180deg,var(--panel),var(--bg));
+    border-top:1px solid var(--line);padding:12px 14px 16px;display:flex;
+    flex-direction:column;gap:12px;}
+  .stats{display:flex;gap:8px;}
+  .stat{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:8px 10px;}
+  .stat .k{font-size:9px;letter-spacing:.18em;color:var(--dim);}
+  .stat .v{font-size:17px;font-weight:700;margin-top:2px;}
+  .stat .v.gold{color:var(--gold);}
+
+  .selwrap{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+    padding:12px 12px 10px;}
+  .selhead{display:flex;justify-content:space-between;align-items:flex-end;}
+  .selhead .lab{font-size:10px;letter-spacing:.2em;color:var(--dim);}
+  .selhead .num{font-size:30px;font-weight:800;color:var(--gold);line-height:.9;}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;
+    background:transparent;margin-top:8px;}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:6px;
+    background:linear-gradient(90deg,#2a6b49,#1a3b2a);}
+  input[type=range]::-moz-range-track{height:6px;border-radius:6px;
+    background:linear-gradient(90deg,#2a6b49,#1a3b2a);}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:26px;height:26px;margin-top:-10px;border-radius:50%;cursor:pointer;
+    background:radial-gradient(circle at 35% 30%,var(--gold2),#b5872f);
+    border:2px solid #1a120a;box-shadow:0 0 12px rgba(233,194,90,.5);}
+  input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;
+    cursor:pointer;background:radial-gradient(circle at 35% 30%,var(--gold2),#b5872f);
+    border:2px solid #1a120a;box-shadow:0 0 12px rgba(233,194,90,.5);}
+  .ticks{display:flex;justify-content:space-between;font-size:9px;color:var(--dim);
+    margin-top:2px;padding:0 2px;}
+  .payline{margin-top:8px;font-size:11px;color:var(--txt);letter-spacing:.02em;}
+  .payline b{color:var(--gold);}
+
+  .stakerow{display:flex;align-items:center;gap:8px;}
+  .stakerow .lab{font-size:9px;letter-spacing:.18em;color:var(--dim);width:42px;}
+  .step{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;background:var(--panel2);}
+  .step button{width:40px;height:38px;border:0;background:transparent;color:var(--gold);
+    font-size:20px;cursor:pointer;}
+  .step button:active{background:#15201a;}
+  .step .sv{min-width:58px;text-align:center;font-size:16px;font-weight:700;}
+  .chips{display:flex;gap:6px;margin-left:auto;}
+  .chips button{border:1px solid var(--line);background:var(--panel2);color:var(--txt);
+    border-radius:9px;height:38px;padding:0 12px;font-family:inherit;font-size:12px;cursor:pointer;}
+  .chips button:active{background:#15201a;}
+
+  #breakBtn{width:100%;height:54px;border:0;border-radius:12px;cursor:pointer;
+    font-family:inherit;font-size:18px;font-weight:800;letter-spacing:.18em;
+    color:#1a1205;background:linear-gradient(180deg,var(--gold2),#caa242);
+    box-shadow:0 6px 22px rgba(233,194,90,.28);transition:filter .15s;}
+  #breakBtn:active{filter:brightness(.92);}
+  #breakBtn:disabled{filter:grayscale(.7) brightness(.6);cursor:default;color:#5a4f38;
+    box-shadow:none;}
+  .fair{font-size:9.5px;color:var(--dim);letter-spacing:.02em;text-align:center;line-height:1.5;}
+
+  @media(min-width:880px){
+    #app{flex-direction:row;}
+    #deck{flex:0 0 360px;border-top:0;border-left:1px solid var(--line);
+      justify-content:center;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <div id="hud">
+      <div id="title">BREAK</div>
+      <div id="multBig"><div class="m" id="hudMult">1.48×</div><div class="lbl">PAYOUT</div></div>
+      <div id="banner"></div>
+      <div id="cosmetic">result is RNG-decided · the break is cosmetic</div>
+    </div>
+  </div>
+
+  <div id="deck">
+    <div class="stats">
+      <div class="stat"><div class="k">BALANCE</div><div class="v gold" id="sBal">1000</div></div>
+      <div class="stat"><div class="k">TO WIN</div><div class="v" id="sWin">14</div></div>
+      <div class="stat"><div class="k">AT STAKE</div><div class="v" id="sStake">10</div></div>
+    </div>
+
+    <div class="selwrap">
+      <div class="selhead">
+        <div><div class="lab" id="selLab">AT LEAST</div></div>
+        <div class="num" id="selNum">2</div>
+      </div>
+      <input type="range" id="slider" min="0" max="6" step="1" value="2" />
+      <div class="ticks"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span></div>
+      <div class="payline" id="payline"></div>
+    </div>
+
+    <div class="stakerow">
+      <div class="lab">STAKE</div>
+      <div class="step">
+        <button id="stMinus">−</button>
+        <div class="sv" id="stVal">10</div>
+        <button id="stPlus">+</button>
+      </div>
+      <div class="chips">
+        <button data-chip="5">5</button>
+        <button data-chip="25">25</button>
+        <button data-chip="100">100</button>
+      </div>
+    </div>
+
+    <button id="breakBtn">BREAK</button>
+    <div class="fair">0 = dry break · 1–6 = at least N · pay = 0.95 ÷ P(win) · RTP 95.00%</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+/* ===================== MONEY MODEL (exact) ===================== */
+let P = [0.104357,0.254826,0.290383,0.204844,0.100040,0.035828,0.009721];
+(function normalize(){ const s=P.reduce((a,b)=>a+b,0); P=P.map(p=>p/s); })(); // -> sums to exactly 1
+function winProb(N){ return N===0 ? P[0] : P.slice(N,7).reduce((a,b)=>a+b,0); }
+function MULT(N){ return 0.95 / winProb(N); }
+function drawC(){
+  const r=Math.random(); let c=0;
+  for(let i=0;i<7;i++){ c+=P[i]; if(r<=c) return i; }
+  return 6;
+}
+// RTP proof to console
+(function proof(){
+  let ok=true; const lines=[];
+  for(let N=0;N<=6;N++){ const ev=winProb(N)*MULT(N); if(Math.abs(ev-0.95)>1e-9) ok=false;
+    lines.push(`N=${N} mult=${MULT(N).toFixed(2)}x EV=${ev.toFixed(6)}`); }
+  console.log('[FAIRNESS] P sum =', P.reduce((a,b)=>a+b,0).toFixed(12));
+  console.log('[FAIRNESS] EV==0.95 for all N:', ok);
+  lines.forEach(l=>console.log('  '+l));
+})();
+
+/* ===================== TABLE CONSTANTS ===================== */
+const L=1.15, Wd=0.60, R=0.052;
+const POCK_R=0.105, SINK_R=0.86*POCK_R;
+const FRIC=1.05, REST=0.965, VMAX=12, SUBSTEPS=8, BURST_T=0.55;
+const CUSHION=0.05;
+const POCKETS=[
+  {x:-L,z:-Wd},{x:L,z:-Wd},{x:-L,z:Wd},{x:L,z:Wd},{x:0,z:-Wd},{x:0,z:Wd}
+];
+const RACK_APEX={x:0.30, z:0};
+
+/* ===================== RENDERING ===================== */
+const canvas=document.getElementById('gl');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x070b08);
+
+const camera=new THREE.OrthographicCamera(-1,1,1,-1,0.1,20);
+camera.position.set(0,6,0);
+camera.up.set(0,0,-1);
+camera.lookAt(0,0,0);
+
+function resize(){
+  const w=canvas.clientWidth, h=canvas.clientHeight;
+  if(w===0||h===0) return;
+  renderer.setSize(w,h,false);
+  const aspect=w/h;
+  const halfX=L+CUSHION+0.06;   // world half-extent we must fit horizontally
+  const halfZ=Wd+CUSHION+0.06;  // ... and vertically
+  let halfH=Math.max(halfZ, halfX/aspect);
+  let halfW=halfH*aspect;
+  camera.left=-halfW; camera.right=halfW; camera.top=halfH; camera.bottom=-halfH;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize);
+
+/* lights + soft shadow */
+scene.add(new THREE.AmbientLight(0xb8d8c4,0.55));
+const key=new THREE.DirectionalLight(0xfff2d8,1.05);
+key.position.set(0.8,5,0.6);
+key.castShadow=true;
+key.shadow.mapSize.set(2048,2048);
+const sc=key.shadow.camera;
+sc.left=-1.6; sc.right=1.6; sc.top=1.2; sc.bottom=-1.2; sc.near=0.5; sc.far=12;
+key.shadow.bias=-0.0006;
+scene.add(key);
+scene.add(new THREE.HemisphereLight(0x223b2c,0x05100a,0.5));
+
+/* table felt */
+const feltMat=new THREE.MeshStandardMaterial({color:0x12603e,roughness:0.92,metalness:0.0});
+const felt=new THREE.Mesh(new THREE.BoxGeometry(2*L+0.02,0.08,2*Wd+0.02),feltMat);
+felt.position.y=-0.04; felt.receiveShadow=true; scene.add(felt);
+
+/* rails */
+const railMat=new THREE.MeshStandardMaterial({color:0x2a1a0e,roughness:0.7,metalness:0.1});
+function addRail(w,d,x,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.10,d),railMat);
+  m.position.set(x,0.01,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); }
+const railT=CUSHION;
+addRail(2*L+2*railT, railT, 0, -Wd-railT/2);
+addRail(2*L+2*railT, railT, 0,  Wd+railT/2);
+addRail(railT, 2*Wd, -L-railT/2, 0);
+addRail(railT, 2*Wd,  L+railT/2, 0);
+
+/* pockets */
+const pocketMat=new THREE.MeshStandardMaterial({color:0x05080a,roughness:1,metalness:0});
+POCKETS.forEach(p=>{
+  const m=new THREE.Mesh(new THREE.CircleGeometry(POCK_R,28),pocketMat);
+  m.rotation.x=-Math.PI/2; m.position.set(p.x,0.011,p.z); scene.add(m);
+  const ring=new THREE.Mesh(new THREE.RingGeometry(POCK_R,POCK_R+0.012,28),
+    new THREE.MeshStandardMaterial({color:0x141414,roughness:.8}));
+  ring.rotation.x=-Math.PI/2; ring.position.set(p.x,0.012,p.z); scene.add(ring);
+});
+
+/* ball textures via canvas */
+const BALL_COLORS={1:'#e8b300',2:'#10398f',3:'#c0231f',4:'#5b2487',5:'#d2641e',
+  6:'#0c7a44',7:'#7c241c',8:'#0a0a0a',9:'#e8b300',10:'#10398f',11:'#c0231f',
+  12:'#5b2487',13:'#d2641e',14:'#0c7a44',15:'#7c241c'};
+function makeBallTexture(n){
+  const s=256, c=document.createElement('canvas'); c.width=c.height=s;
+  const g=c.getContext('2d');
+  if(n===0){ // cue
+    g.fillStyle='#f4f1e6'; g.fillRect(0,0,s,s);
+    g.fillStyle='#d23b3b'; g.beginPath(); g.arc(s*0.5,s*0.28,10,0,7); g.fill();
+    return finishTex(c);
+  }
+  const col=BALL_COLORS[n];
+  if(n>=9){ g.fillStyle='#f4f1e6'; g.fillRect(0,0,s,s);
+    g.fillStyle=col; g.fillRect(0,s*0.30,s,s*0.40);
+  } else { g.fillStyle=col; g.fillRect(0,0,s,s); }
+  // white number disc (appears once on the sphere)
+  g.fillStyle='#f4f1e6'; g.beginPath(); g.arc(s*0.5,s*0.5,s*0.20,0,7); g.fill();
+  g.fillStyle='#111'; g.font='bold 80px ui-monospace,monospace';
+  g.textAlign='center'; g.textBaseline='middle'; g.fillText(String(n),s*0.5,s*0.54);
+  return finishTex(c);
+}
+function finishTex(c){ const t=new THREE.CanvasTexture(c); t.anisotropy=4; return t; }
+
+const ballGeo=new THREE.SphereGeometry(R,32,24);
+function makeBallMesh(n){
+  const mat=new THREE.MeshStandardMaterial({map:makeBallTexture(n),roughness:0.28,
+    metalness:0.05,envMapIntensity:0.4});
+  const m=new THREE.Mesh(ballGeo,mat);
+  m.castShadow=true; m.receiveShadow=true; m.position.y=R; return m;
+}
+
+/* ball objects */
+const balls=[];
+function makeBall(n,isCue){
+  const mesh=makeBallMesh(isCue?0:n);
+  scene.add(mesh);
+  return {n,isCue,mesh,pos:{x:0,z:0},vel:{x:0,z:0},
+    active:true,sunk:false,clear:false,winner:false,
+    sinking:false,dropT:0,sinkPocket:null,_score:0,_pocket:null};
+}
+const cue=makeBall(0,true);
+balls.push(cue);
+for(let i=1;i<=15;i++) balls.push(makeBall(i,false));
+const objectBalls=balls.filter(b=>!b.isCue);
+
+/* ===================== SETUP PER ROUND ===================== */
+function rackBalls(){
+  let idx=0; const rowDx=R*Math.sqrt(3)*1.02, colDz=2*R*1.02;
+  for(let row=0;row<5;row++){
+    for(let j=0;j<=row;j++){
+      const b=objectBalls[idx++];
+      b.pos.x=RACK_APEX.x+row*rowDx;
+      b.pos.z=RACK_APEX.z+(j-row/2)*colDz;
+      resetBallState(b);
+    }
+  }
+}
+function resetBallState(b){
+  b.vel.x=0; b.vel.z=0; b.active=true; b.sunk=false; b.clear=false; b.winner=false;
+  b.sinking=false; b.dropT=0; b.sinkPocket=null;
+  b.mesh.visible=true; b.mesh.scale.set(1,1,1); b.mesh.position.y=R;
+  syncMesh(b);
+}
+function placeCue(){
+  const x=-(L-R)+Math.random()*((L-R)-0.16);   // [-(L-R), -0.16]
+  const z=(Math.random()*2-1)*(Wd-R-0.02);
+  cue.pos.x=x; cue.pos.z=z; resetBallState(cue);
+}
+function syncMesh(b){ b.mesh.position.x=b.pos.x; b.mesh.position.z=b.pos.z; }
+
+function resetTable(){ rackBalls(); placeCue(); }
+
+/* ===================== PHYSICS (cosmetic) ===================== */
+function speed(b){ return Math.hypot(b.vel.x,b.vel.z); }
+
+function integrate(h){
+  for(const b of balls){
+    if(!b.active||b.sunk) continue;
+    b.pos.x+=b.vel.x*h; b.pos.z+=b.vel.z*h;
+    const dec=Math.exp(-FRIC*h); b.vel.x*=dec; b.vel.z*=dec;
+    const sp=speed(b); if(sp>VMAX){ const k=VMAX/sp; b.vel.x*=k; b.vel.z*=k; }
+    if(sp<0.004 && !b.clear){ b.vel.x=0; b.vel.z=0; }
+  }
+}
+function cushions(){
+  for(const b of balls){
+    if(!b.active||b.sunk||b.clear) continue;   // clear winners ignore cushions
+    if(b.pos.x> L-R){ b.pos.x=L-R; b.vel.x=-Math.abs(b.vel.x)*REST; }
+    if(b.pos.x<-(L-R)){ b.pos.x=-(L-R); b.vel.x= Math.abs(b.vel.x)*REST; }
+    if(b.pos.z> Wd-R){ b.pos.z=Wd-R; b.vel.z=-Math.abs(b.vel.z)*REST; }
+    if(b.pos.z<-(Wd-R)){ b.pos.z=-(Wd-R); b.vel.z= Math.abs(b.vel.z)*REST; }
+  }
+}
+function ballCollisions(){
+  const min=2*R, f=(1+REST)/2;
+  for(let i=0;i<balls.length;i++){
+    const a=balls[i]; if(!a.active||a.sunk||a.clear) continue;
+    for(let j=i+1;j<balls.length;j++){
+      const b=balls[j]; if(!b.active||b.sunk||b.clear) continue;
+      let dx=b.pos.x-a.pos.x, dz=b.pos.z-a.pos.z;
+      let d=Math.hypot(dx,dz);
+      if(d>0 && d<min){
+        const nx=dx/d, nz=dz/d, overlap=(min-d)/2;
+        a.pos.x-=nx*overlap; a.pos.z-=nz*overlap;
+        b.pos.x+=nx*overlap; b.pos.z+=nz*overlap;
+        const p=(a.vel.x*nx+a.vel.z*nz)-(b.vel.x*nx+b.vel.z*nz);
+        if(p>0){ const imp=p*f;
+          a.vel.x-=imp*nx; a.vel.z-=imp*nz;
+          b.vel.x+=imp*nx; b.vel.z+=imp*nz; }
+      }
+    }
+  }
+}
+function physicsStep(dt){
+  const h=dt/SUBSTEPS;
+  for(let s=0;s<SUBSTEPS;s++){ integrate(h); ballCollisions(); cushions(); }
+}
+
+/* ===================== BREAK SEQUENCE ===================== */
+let state='IDLE', C=0, betN=2, stake=10, balance=1000;
+let burstElapsed=0, rollElapsed=0, winners=[];
+
+function startBreak(){
+  if(state!=='IDLE') return;
+  if(stake>balance){ flashBanner('insufficient balance',false,0,true); return; }
+  resetTable();
+  C=drawC();
+  balance-=stake;            // deduct stake on BREAK
+  // fire cue toward apex with small random angle
+  const dx=RACK_APEX.x-cue.pos.x, dz=RACK_APEX.z-cue.pos.z;
+  let ang=Math.atan2(dz,dx)+(Math.random()*2-1)*0.05;
+  const power=6.6+Math.random()*0.8;
+  cue.vel.x=Math.cos(ang)*power; cue.vel.z=Math.sin(ang)*power;
+  state='BURST'; burstElapsed=0; rollElapsed=0; winners=[];
+  setBreaking(true); hideBanner(); refreshUI();
+}
+
+function assignSinkers(){
+  const cand=objectBalls.filter(b=>b.active&&!b.sunk);
+  for(const b of cand){
+    const sp=speed(b);
+    const dir = sp>1e-4 ? {x:b.vel.x/sp,z:b.vel.z/sp} : {x:0,z:0};
+    let best=-Infinity, bp=null;
+    for(const p of POCKETS){
+      const wx=p.x-b.pos.x, wz=p.z-b.pos.z, d=Math.hypot(wx,wz)||1e-6;
+      const score=(dir.x*wx/d+dir.z*wz/d)-0.20*d;
+      if(score>best){ best=score; bp=p; }
+    }
+    b._score=best; b._pocket=bp;
+  }
+  cand.sort((a,b)=>b._score-a._score);
+  winners=cand.slice(0,C);
+  const losers=cand.slice(C);
+  for(const b of winners) setWinner(b);
+  for(const b of losers) applySkirt(b);
+}
+function setWinner(b){
+  const p=b._pocket;
+  const dx=p.x-b.pos.x, dz=p.z-b.pos.z, d=Math.hypot(dx,dz)||1e-6;
+  const v=Math.min(VMAX, FRIC*(d+0.5)+2.4);   // guarantees arrival under friction
+  b.vel.x=dx/d*v; b.vel.z=dz/d*v;
+  b.winner=true; b.clear=true; b.sinkPocket=p;
+}
+function applySkirt(b){
+  const sp=speed(b); if(sp<1e-3) return;
+  const dir={x:b.vel.x/sp,z:b.vel.z/sp};
+  for(const p of POCKETS){
+    const wx=p.x-b.pos.x, wz=p.z-b.pos.z;
+    const proj=wx*dir.x+wz*dir.z; if(proj<=0) continue;      // pocket behind
+    const perp=Math.abs(wx*dir.z-wz*dir.x);                  // |w x dir|
+    if(perp<1.4*SINK_R){
+      const cross=dir.x*wz-dir.z*wx;                         // which side
+      const a=(cross>0?1:-1)*0.30;
+      const ca=Math.cos(a), sa=Math.sin(a);
+      const vx=b.vel.x, vz=b.vel.z;
+      b.vel.x=vx*ca-vz*sa; b.vel.z=vx*sa+vz*ca;
+      return;                                                // one-time only
+    }
+  }
+}
+function sinkBall(b){
+  b.sunk=true; b.clear=true; b.sinking=true; b.dropT=0;
+  b.vel.x=0; b.vel.z=0; if(!b.sinkPocket) b.sinkPocket=b._pocket;
+}
+function checkCaptures(){
+  for(const b of winners){
+    if(b.sunk) continue;
+    const p=b.sinkPocket;
+    if(Math.hypot(p.x-b.pos.x,p.z-b.pos.z)<SINK_R) sinkBall(b);
+  }
+}
+function tableAtRest(){
+  let mx=0;
+  for(const b of balls){ if(b.active&&!b.sunk) mx=Math.max(mx,speed(b)); }
+  return mx<0.03;
+}
+function allWinnersSunk(){ return winners.every(b=>b.sunk); }
+
+function settle(){
+  const won = betN===0 ? (C===0) : (C>=betN);
+  const credited = stake*MULT(betN);
+  if(won) balance += credited;
+  state='IDLE'; setBreaking(false);
+  const betTxt = betN===0 ? 'dry break' : '≥'+betN;
+  if(won) flashBanner(`sank ${C} · you bet ${betTxt} · WIN +${fmt(credited)}`,true);
+  else    flashBanner(`sank ${C} · you bet ${betTxt} · MISS −${fmt(stake)}`,false);
+  refreshUI();
+}
+
+/* ===================== MAIN LOOP ===================== */
+let last=performance.now();
+function loop(now){
+  let dt=(now-last)/1000; last=now;
+  if(dt>0.05) dt=0.05;   // clamp (cosmetic only)
+
+  if(state==='BURST'){
+    physicsStep(dt); burstElapsed+=dt;
+    if(burstElapsed>=BURST_T){ assignSinkers(); state='ROLL'; rollElapsed=0; }
+  } else if(state==='ROLL'){
+    physicsStep(dt); rollElapsed+=dt; checkCaptures();
+    if(rollElapsed>9){ for(const b of winners) if(!b.sunk) sinkBall(b); }
+    if(allWinnersSunk() && (tableAtRest()||rollElapsed>9)) settle();
+  }
+
+  // render sync + rolling spin + drop animation
+  for(const b of balls){
+    if(b.sinking){
+      b.dropT+=dt;
+      const t=Math.min(1,b.dropT/0.35);
+      b.pos.x+= (b.sinkPocket.x-b.pos.x)*Math.min(1,dt*8);
+      b.pos.z+= (b.sinkPocket.z-b.pos.z)*Math.min(1,dt*8);
+      b.mesh.position.x=b.pos.x; b.mesh.position.z=b.pos.z;
+      b.mesh.position.y=R-t*(R+0.12);
+      const sc=Math.max(0.02,1-t);
+      b.mesh.scale.set(sc,sc,sc);
+      if(t>=1){ b.sinking=false; b.active=false; b.mesh.visible=false; }
+      continue;
+    }
+    if(!b.active||b.sunk) continue;
+    syncMesh(b);
+    const sp=speed(b);
+    if(sp>1e-4){
+      const axis=new THREE.Vector3(b.vel.z,0,-b.vel.x).normalize();
+      b.mesh.rotateOnWorldAxis(axis, sp*dt/R);
+    }
+  }
+
+  renderer.render(scene,camera);
+  requestAnimationFrame(loop);
+}
+
+/* ===================== UI ===================== */
+const $=id=>document.getElementById(id);
+function fmt(n){ return (Math.round(n*100)/100).toLocaleString(undefined,{maximumFractionDigits:2}); }
+
+const slider=$('slider'), selNum=$('selNum'), selLab=$('selLab'), payline=$('payline');
+const hudMult=$('hudMult'), sBal=$('sBal'), sWin=$('sWin'), sStake=$('sStake'), stVal=$('stVal');
+const breakBtn=$('breakBtn');
+
+function refreshUI(){
+  const m=MULT(betN), wp=winProb(betN), toWin=stake*m;
+  selNum.textContent=betN;
+  selLab.textContent = betN===0 ? 'DRY BREAK' : 'AT LEAST';
+  hudMult.textContent=m.toFixed(2)+'×';
+  payline.innerHTML=`pays <b>${m.toFixed(2)}×</b> · chance ${(wp*100).toFixed(2)}% · win ${fmt(toWin)}`;
+  sBal.textContent=fmt(balance);
+  sWin.textContent=fmt(toWin);
+  sStake.textContent=fmt(stake);
+  stVal.textContent=stake;
+}
+function setBreaking(b){
+  breakBtn.disabled=b;
+  breakBtn.textContent=b?'BREAKING…':'BREAK';
+  slider.disabled=b;
+}
+let bannerTimer=null;
+function flashBanner(text,win,_x,neutral){
+  const el=$('banner'); el.textContent=text;
+  el.className='show'+(neutral?'':(win?' win':' miss'));
+  clearTimeout(bannerTimer); bannerTimer=setTimeout(hideBanner,3200);
+}
+function hideBanner(){ $('banner').className=''; }
+
+slider.addEventListener('input',()=>{ betN=parseInt(slider.value,10); refreshUI(); });
+function setStake(v){ stake=Math.max(1,Math.min(100000,Math.round(v))); refreshUI(); }
+$('stMinus').addEventListener('click',()=>setStake(stake-5));
+$('stPlus').addEventListener('click',()=>setStake(stake+5));
+document.querySelectorAll('.chips button').forEach(btn=>
+  btn.addEventListener('click',()=>setStake(parseInt(btn.dataset.chip,10))));
+breakBtn.addEventListener('click',startBreak);
+
+/* ===================== BOOT ===================== */
+resize(); resetTable(); refreshUI();
+// ensure layout settled before first frustum calc
+requestAnimationFrame(()=>{ resize(); });
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

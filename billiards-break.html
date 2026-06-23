@@ -387,18 +387,38 @@ function ballCollisions(){
     }
   }
 }
+// Soft "jaw" around every pocket. Non-winner balls (and the cue) bounce off it,
+// so a ball that should NOT score never even reaches the hole — it rattles past
+// realistically. Winners are flagged `clear`, so they pass through and drop.
+function pocketGuard(){
+  const guardR=POCK_R+0.018;            // center kept this far from the hole (> SINK_R)
+  for(const b of balls){
+    if(!b.active||b.sunk||b.clear) continue;
+    for(const p of POCKETS){
+      const dx=b.pos.x-p.x, dz=b.pos.z-p.z, d=Math.hypot(dx,dz);
+      if(d<guardR && d>1e-6){
+        const nx=dx/d, nz=dz/d;
+        b.pos.x=p.x+nx*guardR; b.pos.z=p.z+nz*guardR;
+        const vn=b.vel.x*nx+b.vel.z*nz;          // inward component
+        if(vn<0){ b.vel.x-=(1+REST)*vn*nx; b.vel.z-=(1+REST)*vn*nz; }
+      }
+    }
+  }
+}
 function physicsStep(dt){
   const h=dt/SUBSTEPS;
-  for(let s=0;s<SUBSTEPS;s++){ integrate(h); ballCollisions(); cushions(); }
+  for(let s=0;s<SUBSTEPS;s++){ integrate(h); ballCollisions(); cushions(); pocketGuard(); }
 }
 
 /* ===================== BREAK SEQUENCE ===================== */
 let state='IDLE', C=0, betN=2, stake=10, balance=1000;
 let burstElapsed=0, rollElapsed=0, winners=[];
+let restartTimer=null;
 
 function startBreak(){
   if(state!=='IDLE') return;
   if(stake>balance){ flashBanner('insufficient balance',false,0,true); return; }
+  clearTimeout(restartTimer);
   resetTable();
   C=drawC();
   balance-=stake;            // deduct stake on BREAK
@@ -433,7 +453,11 @@ function assignSinkers(){
 function setWinner(b){
   const p=b._pocket;
   const dx=p.x-b.pos.x, dz=p.z-b.pos.z, d=Math.hypot(dx,dz)||1e-6;
-  const v=Math.min(VMAX, FRIC*(d+0.5)+2.4);   // guarantees arrival under friction
+  // Speed at the pocket = v - FRIC*d = ARRIVE. We pick ARRIVE small so the ball
+  // visibly DECELERATES on its way in (suspense: "will it reach the hole?") yet
+  // v > FRIC*d guarantees it always crosses the jaws. Cosmetic only.
+  const ARRIVE=0.7;
+  const v=Math.min(VMAX, FRIC*d + ARRIVE);
   b.vel.x=dx/d*v; b.vel.z=dz/d*v;
   b.winner=true; b.clear=true; b.sinkPocket=p;
 }
@@ -461,8 +485,10 @@ function sinkBall(b){
 function checkCaptures(){
   for(const b of winners){
     if(b.sunk) continue;
-    const p=b.sinkPocket;
-    if(Math.hypot(p.x-b.pos.x,p.z-b.pos.z)<SINK_R) sinkBall(b);
+    // a winner drops into ANY hole it crosses (still exactly C sinks total)
+    for(const p of POCKETS){
+      if(Math.hypot(p.x-b.pos.x,p.z-b.pos.z)<SINK_R){ b.sinkPocket=p; sinkBall(b); break; }
+    }
   }
 }
 function tableAtRest(){
@@ -478,9 +504,13 @@ function settle(){
   if(won) balance += credited;
   state='IDLE'; setBreaking(false);
   const betTxt = betN===0 ? 'dry break' : '≥'+betN;
-  if(won) flashBanner(`sank ${C} · you bet ${betTxt} · WIN +${fmt(credited)}`,true);
-  else    flashBanner(`sank ${C} · you bet ${betTxt} · MISS −${fmt(stake)}`,false);
+  // persist the result message until the table re-racks
+  if(won) flashBanner(`sank ${C} · you bet ${betTxt} · WIN +${fmt(credited)}`,true,true);
+  else    flashBanner(`sank ${C} · you bet ${betTxt} · MISS −${fmt(stake)}`,false,true);
   refreshUI();
+  // auto re-rack 4s after the balls have come to rest
+  clearTimeout(restartTimer);
+  restartTimer=setTimeout(()=>{ if(state==='IDLE'){ resetTable(); hideBanner(); } },4000);
 }
 
 /* ===================== MAIN LOOP ===================== */
@@ -550,10 +580,11 @@ function setBreaking(b){
   slider.disabled=b;
 }
 let bannerTimer=null;
-function flashBanner(text,win,_x,neutral){
+function flashBanner(text,win,persist,neutral){
   const el=$('banner'); el.textContent=text;
   el.className='show'+(neutral?'':(win?' win':' miss'));
-  clearTimeout(bannerTimer); bannerTimer=setTimeout(hideBanner,3200);
+  clearTimeout(bannerTimer);
+  if(!persist) bannerTimer=setTimeout(hideBanner,3200);   // settle messages persist until re-rack
 }
 function hideBanner(){ $('banner').className=''; }
 
